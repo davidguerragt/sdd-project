@@ -76,7 +76,7 @@ export class UserProfile {
 @Index(['ownerId', 'createdAt'])
 export class Wallet {
   @PrimaryColumn(id()) id!: string;
-  @Index({ unique: true }) @Column({ name: 'owner_id', ...id() }) ownerId!: string;
+  @Column({ name: 'owner_id', ...id() }) ownerId!: string;
   @Column({ type: 'char', length: 3, default: 'GTQ' }) currency!: string;
   @Column({ type: 'varchar', length: 16, default: 'active' }) status!: 'active' | 'suspended' | 'closed';
   @Column({ name: 'idempotency_key', type: 'varchar', length: 128, nullable: true, unique: true }) idempotencyKey!: string | null;
@@ -87,7 +87,7 @@ export class Wallet {
 @Entity('financial_accounts')
 export class FinancialAccount {
   @PrimaryColumn(id()) id!: string;
-  @Column({ name: 'owner_id', ...id() }) ownerId!: string;
+  @Index() @Column({ name: 'owner_id', ...id() }) ownerId!: string;
   @Column({ type: 'char', length: 3, default: 'GTQ' }) currency!: string;
   @Column({ type: 'decimal', precision: 18, scale: 2, default: '0.00' }) balance!: string;
   @Column({ type: 'varchar', length: 16, default: 'active' }) status!: 'active' | 'suspended' | 'closed' | 'disabled';

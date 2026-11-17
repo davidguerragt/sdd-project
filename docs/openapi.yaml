@@ -209,8 +209,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [recipientWalletId, amount]
+              required: [senderWalletId, recipientWalletId, amount]
               properties:
+                senderWalletId: { type: string, format: uuid, description: Billetera emisora propia; Transacciones valida su propietario con el JWT }
                 recipientWalletId: { type: string, format: uuid }
                 amount: { type: string, pattern: '^([1-9][0-9]*|0)(\.[0-9]{1,2})?$' }
                 currency: { type: string, enum: [GTQ], default: GTQ }

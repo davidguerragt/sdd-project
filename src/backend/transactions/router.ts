@@ -172,7 +172,10 @@ transactionsRouter.post('/test/fund', (request, response, next) => {
 transactionsRouter.post('/', authenticate, asyncRoute(async (request: AuthenticatedRequest, response) => {
   const senderId = requireUser(request, response);
   if (!senderId) return;
-  const input = z.object({ recipientWalletId: z.string().uuid(), amount: z.string(), currency: z.literal('GTQ').default('GTQ') }).parse(request.body);
+  const input = z.object({
+    senderWalletId: z.string().uuid(), recipientWalletId: z.string().uuid(), amount: z.string(),
+    currency: z.literal('GTQ').default('GTQ'),
+  }).strict().parse(request.body);
   const idempotencyKey = request.header('idempotency-key');
   if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
     response.status(400).json({ error: 'idempotency_key_required' });
@@ -185,12 +188,12 @@ transactionsRouter.post('/', authenticate, asyncRoute(async (request: Authentica
     response.status(400).json({ error: 'invalid_amount' });
     return;
   }
-  const senderAccount = await database.getRepository(FinancialAccount).findOne({ where: { ownerId: senderId } });
+  const senderAccount = await database.getRepository(FinancialAccount).findOne({ where: { id: input.senderWalletId, ownerId: senderId } });
   if (!senderAccount) {
     response.status(404).json({ error: 'wallet_not_found' });
     return;
   }
-  const senderWalletId = senderAccount.id;
+  const senderWalletId = input.senderWalletId;
   const recipientId = input.recipientWalletId;
   if (recipientId === senderWalletId) {
     response.status(400).json({ error: 'same_wallet' });
@@ -253,7 +256,7 @@ transactionsRouter.post('/', authenticate, asyncRoute(async (request: Authentica
         status: 'confirmed', idempotencyKey, requestHash,
       });
       await manager.getRepository(LedgerEntry).insert([
-        { id: crypto.randomUUID(), transferId, walletId: senderId, direction: 'debit', amount: savedTransfer.amount, currency: 'GTQ' },
+        { id: crypto.randomUUID(), transferId, walletId: senderWalletId, direction: 'debit', amount: savedTransfer.amount, currency: 'GTQ' },
         { id: crypto.randomUUID(), transferId, walletId: recipientId, direction: 'credit', amount: savedTransfer.amount, currency: 'GTQ' },
       ]);
       const eventId = crypto.randomUUID();

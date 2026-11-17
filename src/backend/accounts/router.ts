@@ -29,7 +29,7 @@ accountsRouter.post('/wallets', authenticate, asyncRoute(async (request: Authent
   if (!ownerId) return;
   const idempotencyKey = z.string().min(8).max(128).parse(request.header('idempotency-key'));
   const repo = database.getRepository(Wallet);
-  const existing = await repo.findOne({ where: [{ ownerId }, { idempotencyKey }] });
+  const existing = await repo.findOne({ where: { idempotencyKey } });
   if (existing) {
     if (existing.ownerId === ownerId && existing.idempotencyKey === idempotencyKey) {
       const transactionResponse = await transactionRequest('/accounts', 'POST', {
@@ -47,7 +47,27 @@ accountsRouter.post('/wallets', authenticate, asyncRoute(async (request: Authent
   }
 
   const wallet = { id: crypto.randomUUID(), ownerId, currency: 'GTQ', status: 'active' as const, idempotencyKey };
-  await repo.insert(wallet);
+  try {
+    await repo.insert(wallet);
+  } catch (error) {
+    const concurrent = await repo.findOne({ where: { idempotencyKey } });
+    if (concurrent?.ownerId === ownerId) {
+      const transactionResponse = await transactionRequest('/accounts', 'POST', {
+        walletId: concurrent.id, ownerId, currency: concurrent.currency,
+      }).catch(() => undefined);
+      if (!transactionResponse?.ok) {
+        response.status(503).json({ error: 'transactions_service_unavailable' });
+        return;
+      }
+      response.status(200).json({ walletId: concurrent.id, currency: concurrent.currency, status: concurrent.status });
+      return;
+    }
+    if (concurrent) {
+      response.status(409).json({ error: 'idempotency_key_conflict' });
+      return;
+    }
+    throw error;
+  }
   const transactionResponse = await transactionRequest('/accounts', 'POST', {
     walletId: wallet.id, ownerId, currency: wallet.currency,
   }).catch(() => undefined);

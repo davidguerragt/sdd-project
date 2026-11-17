@@ -13,8 +13,8 @@
 ## Fase 2: Backend Core (Lógica de Negocio)
 - [TASK-04]: Implementar Autenticación según SPEC-001: registro, login, recuperación, sesiones, 2FA y límites de intentos.
 - [TASK-05]: Implementar Usuarios según SPEC-002: perfil propio, validación y desactivación con permisos.
-- [TASK-06]: Implementar Cuentas/Billeteras según SPEC-003: apertura, consulta, suspensión/reactivación y cierre; no escribir saldos.
-- [TASK-07]: Implementar Transacciones según SPEC-004: transferencia P2P ACID, ledger balanceado, idempotencia, control de concurrencia e historial.
+- [TASK-06]: Implementar Cuentas/Billeteras según SPEC-003: múltiples aperturas idempotentes por usuario, consulta, suspensión/reactivación y cierre; no escribir saldos.
+- [TASK-07]: Implementar Transacciones según SPEC-004: selección y verificación de billetera emisora propia, transferencia P2P ACID, ledger balanceado, idempotencia, control de concurrencia e historial.
 - [TASK-20]: Implementar fondeo simulado según SPEC-008 en Transacciones, con guardas de entorno, validación de propiedad/estado, TOTP, ACID, auditoría e idempotencia; agregar migración no destructiva.
 - [TASK-08]: Implementar Notificaciones según SPEC-005: consumo asíncrono, reintentos y deduplicación.
 - [TASK-09]: Implementar Reportes según SPEC-006: historial paginado y resúmenes de operaciones confirmadas.
@@ -34,6 +34,6 @@
 - [TASK-17]: Configurar despliegue, health checks, logs sin secretos, métricas y documentación operativa.
 
 ## Fase 6: Integración MCP
-- [TASK-18]: Implementar el servidor MCP según `SPEC-007-PayFlexMCPServer.md`: recursos y herramientas autenticadas por usuario, llamadas únicamente a las APIs del gateway, transporte stdio local y Streamable HTTP remoto con autenticación aprobada.
+- [TASK-18]: Implementar el servidor MCP según `SPEC-007-PayFlexMCPServer.md`: recursos y herramientas autenticadas por usuario, incluyendo creación de billeteras múltiples y selección de billetera emisora, llamadas únicamente a las APIs del gateway, transporte stdio local y Streamable HTTP remoto con autenticación aprobada.
 - [TASK-19]: Implementar pruebas de aislamiento por usuario, confirmación explícita de transferencias, borradores expirados, 2FA, reintentos idempotentes, límites de tamaño/frecuencia y redacción de secretos; no habilitar transporte remoto hasta aprobar sus prerrequisitos de identidad y TLS.
 - [TASK-21]: Exponer `fund_test_wallet` en MCP solo fuera de producción y con flag explícito; pedir aprobación por elicitation, reenviar una clave idempotente y probar rechazo/rollback sin escribir MySQL desde MCP.

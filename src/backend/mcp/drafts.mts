@@ -8,6 +8,7 @@ interface RedisDraftClient {
 export interface TransferDraft {
   id: string;
   ownerId: string;
+  senderWalletId: string;
   recipientWalletId: string;
   amount: string;
   currency: 'GTQ';

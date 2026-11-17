@@ -11,7 +11,7 @@ Backend de billetera electrónica GTQ basado en las especificaciones de [`.specs
 
 `SERVICE_NAME=all` permite desarrollo local en un proceso. En Docker Compose, cada microservicio se ejecuta por separado detrás del gateway. Consulta [la guía de arquitectura y operación](docs/architecture.md) y el contrato [OpenAPI](docs/openapi.yaml).
 
-Los saldos iniciales son cero. Depósitos, retiros y proveedores de pago están fuera de la Fase 1.
+Cada usuario puede crear varias billeteras GTQ. Los saldos iniciales son cero. Depósitos, retiros y proveedores de pago están fuera de la Fase 1.
 
 ## Servidor MCP
 
@@ -20,3 +20,5 @@ El servidor MCP está registrado para Copilot en [`.mcp.json`](.mcp.json). Ejecu
 Para probar Streamable HTTP solo en localhost, ejecuta `docker compose --profile mcp up --build`; el endpoint queda en `http://localhost:4000/mcp`. El perfil levanta Redis efímero para borradores y rate limits. No expongas ese perfil local a Internet; un despliegue remoto requiere TLS y configurar hosts/orígenes permitidos y `MCP_PUBLIC_URL` HTTPS.
 
 Para agregar saldo ficticio de prueba, pon `ENABLE_TEST_FUNDING=true` en `.env` únicamente en un entorno `development` o `test` y reinicia backend/MCP. La herramienta MCP recibe `{ "walletId": "...", "amount": "100.00", "currency": "GTQ", "idempotencyKey": "UUID" }` y pedirá aprobación explícita; agrega una clave nueva por operación y reutiliza la misma si reintentas. Requiere billetera propia activa. El fondeo queda auditado en `test_wallet_fundings`, no crea una transferencia/ledger P2P y no debe usarse con dinero real. En `production` permanece bloqueado aunque la variable esté activa.
+
+La herramienta MCP `create_my_wallet` abre una billetera GTQ adicional propia con `idempotencyKey`. Al preparar una transferencia, selecciona `senderWalletId`; Transacciones verifica que pertenezca al usuario autenticado.

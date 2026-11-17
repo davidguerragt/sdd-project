@@ -55,6 +55,7 @@ Los identificadores de billetera enviados por el cliente solo pueden utilizarse 
 - `get_my_profile`: sin argumentos; consulta el perfil propio.
 - `list_my_wallets`: acepta paginacion si la API la incorpora; devuelve billeteras propias y GTQ.
 - `get_my_wallet`: acepta `walletId`; la API valida propiedad y devuelve estado/saldo autoritativo.
+- `create_my_wallet`: acepta una `idempotencyKey` y solicita la apertura de otra billetera GTQ para el usuario autenticado; no recibe propietario ni usuario.
 - `get_my_transfers`: filtros opcionales `from`, `to`, `direction`, `page`, `limit`; respeta el maximo de pagina del backend.
 - `get_my_report_summary`: periodo opcional valido; devuelve cantidades decimales como cadenas, moneda y momento de actualizacion.
 - `list_my_notifications`: paginacion limitada; devuelve notificaciones del usuario autenticado.
@@ -67,7 +68,7 @@ Las herramientas de lectura llevan anotacion MCP de solo lectura. El servidor no
 
 La herramienta financiera requiere una confirmacion en dos pasos:
 
-1. `prepare_transfer(recipientWalletId, amount, currency="GTQ")` valida el formato local, crea un borrador efimero ligado al principal y devuelve un resumen visible: billetera receptora, monto exacto GTQ y aviso de que la preparacion no reserva fondos ni garantiza que la operacion sea aceptada.
+1. `prepare_transfer(senderWalletId, recipientWalletId, amount, currency="GTQ")` verifica la billetera emisora con la API de Cuentas, crea un borrador efimero ligado al principal y devuelve un resumen visible con emisora, receptora, monto exacto GTQ y aviso de que la preparacion no reserva fondos ni garantiza que la operacion sea aceptada.
 2. El cliente muestra el resumen y obtiene aprobacion explicita de la persona. No basta con que un modelo haya decidido llamar la herramienta.
 3. `confirm_transfer(draftId, otp?)` hace que el servidor MCP solicite aprobacion mediante una elicitation de formulario ligada a la llamada MCP. El servidor acepta solo la respuesta del cliente validada por el SDK con `approved=true`; no acepta un booleano de confirmacion enviado como argumento por el modelo. Si la persona rechaza, cancela o no marca la aprobacion, la herramienta termina sin llamar a Transacciones. Si el cliente no soporta elicitation, la solicitud se rechaza y tampoco se llama a Transacciones. La respuesta se liga al mismo principal y borrador vigente e inalterado.
 4. Solo despues de aceptar la elicitation, el servidor llama `POST /transactions` con `recipientWalletId`, `amount`, `currency`, la `Idempotency-Key` guardada en el borrador y, si se proporciona, `X-2FA-Code`.

@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS login_attempts (
 
 CREATE TABLE IF NOT EXISTS wallets (
   id CHAR(36) NOT NULL PRIMARY KEY,
-  owner_id CHAR(36) NOT NULL UNIQUE,
+  owner_id CHAR(36) NOT NULL,
   currency CHAR(3) NOT NULL DEFAULT 'GTQ',
   status VARCHAR(16) NOT NULL DEFAULT 'active',
   idempotency_key VARCHAR(128) NULL UNIQUE,

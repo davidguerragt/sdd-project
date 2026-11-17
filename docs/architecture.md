@@ -25,6 +25,8 @@ flowchart LR
 
 Cada proceso selecciona un módulo con `SERVICE_NAME=auth|users|accounts|transactions|notifications|reports|gateway`. `SERVICE_NAME=all` monta todos los routers para desarrollo y no representa el despliegue aislado. Los servicios se comunican mediante HTTP interno con `x-internal-service-token`; los clientes externos deben pasar por el gateway.
 
+Un usuario puede tener varias billeteras. La apertura se deduplica por `Idempotency-Key`, no por usuario. Para transferir, el cliente selecciona un `senderWalletId`; Transacciones verifica que pertenezca al sujeto del JWT y bloquea esa cuenta y la receptora en orden determinista.
+
 El MCP es un proceso cliente separado (`dist-mcp/main.mjs`), con transporte stdio por defecto o Streamable HTTP mediante `--http`. Stdio usa `PAYFLEX_ACCESS_TOKEN`; HTTP verifica cada JWT consultando `/users/me` y deriva el principal del perfil, nunca de argumentos MCP. HTTP exige Redis para borradores/locks y límites de usuario/IP. El perfil Compose `mcp` solo publica en loopback para desarrollo. En remoto debe estar detrás de un proxy TLS confiable y usar `MCP_PUBLIC_URL` HTTPS, hosts/orígenes exactos y Redis privado protegido.
 
 `fund_test_wallet` es una herramienta opt-in. Solo se registra fuera de producción con `ENABLE_TEST_FUNDING=true`; Transactions aplica la misma guarda al endpoint. El saldo y `test_wallet_fundings` se guardan en una transacción ACID, con lock de billetera, idempotencia, verificación 2FA y auditoría. La tabla es una bitácora de fixtures simuladas separada de `ledger_entries`, eventos P2P, notificaciones y reportes. No representa valor real; vuelve a estar desactivada por defecto en Compose/producción.
@@ -40,8 +42,6 @@ Contrato `transfer.confirmed` persistido en `outbox_events`:
 ```json
 {
   "eventId": "uuid",
-
-Para bases existentes, aplica cada archivo nuevo de `migrations/` una vez con las credenciales de `.env`; `migrations/002-test-wallet-fundings.sql` solo crea la tabla de registros de fondeo ficticio si no existe. No requiere actualizar ni borrar filas de billeteras existentes.
   "transferId": "uuid",
   "senderId": "wallet-uuid",
   "recipientId": "wallet-uuid",
@@ -72,6 +72,8 @@ docker compose up --build
 ```
 
 El gateway queda en `http://localhost:8080`. Compose inicializa `schema.sql` solo al crear por primera vez el volumen; para aplicar cambios posteriores se requiere una migración controlada. Para ejecución local, aplica el esquema a la base antes de `npm run dev`.
+
+Para bases existentes, aplica cada archivo nuevo de `migrations/` una vez con las credenciales de `.env`. `migrations/002-test-wallet-fundings.sql` agrega la tabla de fixtures; `migrations/003-multiple-wallets-per-user.sql` elimina la unicidad por propietario sin borrar billeteras ni saldos.
 
 La conexión a MySQL usa `DB_SYNCHRONIZE=false`; no habilites `synchronize` en producción. `GET /health` es liveness y `GET /ready` valida que TypeORM conectó.
 

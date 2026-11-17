@@ -9,6 +9,7 @@ import type { DraftStore, TransferDraft } from './drafts.mjs';
 
 const MAX_PAGE_SIZE = 100;
 const DRAFT_LIFETIME_MS = 5 * 60 * 1000;
+const optionalOtpSchema = z.union([z.string().regex(/^\d{6}$/), z.literal('')]).optional();
 
 function parseAmount(value: string): string {
   if (!/^(?:0|[1-9]\d{0,15})(?:\.\d{1,2})?$/.test(value)) throw new PayFlexApiError(400, 'invalid_amount');
@@ -85,6 +86,19 @@ export function createPayFlexServer(
     try { return toToolResult(await myWallets()); } catch (error) { return toToolError(error); }
   });
 
+  server.registerTool('create_my_wallet', {
+    description: 'Abre una billetera GTQ adicional para el usuario autenticado. Cada solicitud nueva requiere una clave idempotente distinta.',
+    inputSchema: z.object({ idempotencyKey: z.string().min(8).max(128) }).strict(),
+    annotations: localWrite,
+  }, async ({ idempotencyKey }) => {
+    try {
+      const wallet = await api.request('/accounts/wallets', accessToken, {
+        method: 'POST', headers: { 'idempotency-key': idempotencyKey },
+      });
+      return toToolResult(wallet);
+    } catch (error) { return toToolError(error); }
+  });
+
   server.registerTool('get_my_wallet', {
     description: 'Consulta una billetera por ID; el backend verifica que pertenezca a la sesion.',
     inputSchema: z.object({ walletId: z.string().uuid() }), annotations: readOnly,
@@ -158,7 +172,7 @@ export function createPayFlexServer(
         amount: z.string(),
         currency: z.literal('GTQ').default('GTQ'),
         idempotencyKey: z.string().min(8).max(128),
-        otp: z.string().regex(/^\d{6}$/).optional(),
+        otp: optionalOtpSchema,
       }).strict(),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     }, async ({ walletId, amount, currency, idempotencyKey, otp }, context) => {
@@ -199,19 +213,28 @@ export function createPayFlexServer(
   }
 
   server.registerTool('prepare_transfer', {
-    description: 'Prepara un borrador P2P GTQ de 5 minutos. No reserva fondos ni mueve dinero; presenta el resumen al usuario y pide aprobacion explicita antes de confirmar.',
-    inputSchema: z.object({ recipientWalletId: z.string().uuid(), amount: z.string(), currency: z.literal('GTQ').default('GTQ') }).strict(),
+    description: 'Prepara un borrador P2P GTQ de 5 minutos usando una billetera emisora propia explícitamente seleccionada. No reserva fondos ni mueve dinero.',
+    inputSchema: z.object({
+      senderWalletId: z.string().uuid(), recipientWalletId: z.string().uuid(),
+      amount: z.string(), currency: z.literal('GTQ').default('GTQ'),
+    }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-  }, async ({ recipientWalletId, amount, currency }) => {
+  }, async ({ senderWalletId, recipientWalletId, amount, currency }) => {
     try {
       const normalizedAmount = parseAmount(amount);
+      const senderWallet = await api.request<{ status: string; currency: string }>(
+        `/accounts/wallets/${encodeURIComponent(senderWalletId)}`, accessToken,
+      );
+      if (senderWallet.status !== 'active' || senderWallet.currency !== 'GTQ') {
+        return toToolError(new PayFlexApiError(409, 'wallet_inactive'));
+      }
       const draft: TransferDraft = {
-        id: crypto.randomUUID(), ownerId, recipientWalletId, amount: normalizedAmount, currency,
+        id: crypto.randomUUID(), ownerId, senderWalletId, recipientWalletId, amount: normalizedAmount, currency,
         idempotencyKey: crypto.randomUUID(), expiresAt: Date.now() + DRAFT_LIFETIME_MS, status: 'prepared',
       };
       await drafts.create(draft);
       return toToolResult({
-        draftId: draft.id, recipientWalletId, amount: normalizedAmount, currency,
+        draftId: draft.id, senderWalletId, recipientWalletId, amount: normalizedAmount, currency,
         expiresAt: new Date(draft.expiresAt).toISOString(), requiresHumanApproval: true,
         warning: 'Este borrador no reserva fondos. Muestra estos datos y solicita aprobacion explicita antes de ejecutar confirm_transfer.',
       });
@@ -220,7 +243,7 @@ export function createPayFlexServer(
 
   server.registerTool('confirm_transfer', {
     description: 'Solicita aprobacion explicita a la persona para el borrador inalterado y, si aprueba, confirma la transferencia. Si 2FA esta activo, pasa otp. Reintenta exclusivamente el mismo borrador.',
-    inputSchema: z.object({ draftId: z.string().uuid(), otp: z.string().regex(/^\d{6}$/).optional() }).strict(),
+    inputSchema: z.object({ draftId: z.string().uuid(), otp: optionalOtpSchema }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false },
   }, async ({ draftId, otp }, context) => {
     const approvalSchema = z.object({ approved: z.boolean().meta({ title: 'Apruebo esta transferencia' }) });
@@ -244,7 +267,7 @@ export function createPayFlexServer(
       return inputRequired({
         inputRequests: {
           human_approval: inputRequired.elicit({
-            message: `¿Apruebas enviar Q ${draftBeforeApproval.amount} a la billetera ${draftBeforeApproval.recipientWalletId}? Esta acción moverá fondos de forma permanente.`,
+            message: `¿Apruebas enviar Q ${draftBeforeApproval.amount} desde ${draftBeforeApproval.senderWalletId} a ${draftBeforeApproval.recipientWalletId}? Esta acción moverá fondos de forma permanente.`,
             requestedSchema: approvalSchema,
           }),
         },
@@ -261,7 +284,10 @@ export function createPayFlexServer(
 
       const result = await api.request<Record<string, unknown>>('/transactions', accessToken, {
         method: 'POST',
-        body: { recipientWalletId: draft.recipientWalletId, amount: draft.amount, currency: draft.currency },
+        body: {
+          senderWalletId: draft.senderWalletId, recipientWalletId: draft.recipientWalletId,
+          amount: draft.amount, currency: draft.currency,
+        },
         headers: {
           'idempotency-key': draft.idempotencyKey,
           ...(otp ? { 'x-2fa-code': otp } : {}),

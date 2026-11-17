@@ -1,0 +1,1 @@
+ALTER TABLE wallets DROP INDEX owner_id;
