@@ -28,12 +28,20 @@ El proyecto "PayFlex" es una billetera electrónica móvil diseñada para ofrece
 - Cada microservicio debe ser independiente y desplegable de manera autónoma.
 - Debe existir un microservicio para cada módulo funcional: Autenticación, Gestión de Usuarios, Gestión de Cuentas, Transacciones, Notificaciones y Reportes.
 - Cada microservicio debe exponer una API REST y comunicarse con otros microservicios a través de HTTP o gRPC.
+- El microservicio de Transacciones es la única autoridad de saldos, ledger y estado financiero que habilita movimientos. El débito, el crédito, la validación del estado financiero y los asientos de ledger deben confirmarse/protegerse en una sola frontera transaccional ACID de MySQL; ningún otro servicio puede modificar estos datos directamente.
+- El microservicio de Cuentas expone los flujos de apertura, consulta, suspensión, reactivación y cierre de billeteras, pero delega las mutaciones del estado financiero al servicio de Transacciones mediante un contrato síncrono. No se permite tomar decisiones de transferencia a partir de una copia eventualmente consistente del estado.
+- Los servicios que necesiten consultar otro módulo deben usar su contrato de API; no deben escribir en sus tablas ni simular una transacción distribuida.
+- Las notificaciones y los reportes no deben retrasar ni revertir una transferencia ya confirmada. Deben consumir eventos de transacciones confirmadas y tolerar entregas repetidas.
 
 ### Principios no negociables
 1. Seguridad: Implementar autenticación y autorización robusta, cifrado de datos en tránsito y en reposo, y protección contra ataques comunes (inyección SQL, XSS, CSRF, etc.).
 2. Escalabilidad: Diseñar la arquitectura para soportar un alto volumen de transacciones concurrentes y permitir la adición de nuevos microservicios sin afectar la estabilidad del sistema.
 3. Alta Disponibilidad: Implementar estrategias de replicación y balanceo de carga para garantizar que el sistema esté disponible incluso en caso de fallos de hardware o software.
 
+### Organización del Código
+- El Backend debe estar organizado en carpetas por microservicio, cada una con su propio conjunto de rutas, controladores, modelos y servicios bajo la carpeta principal `src/backend`.
+- El Frontend debe estar organizado en carpetas por módulo funcional, cada una con sus propios componentes, servicios y estilos bajo la carpeta principal `src/frontend`.
+- La documentación debe estar centralizada en la carpeta `docs`, incluyendo diagramas de arquitectura, especificaciones técnicas y guías de desarrollo.
 
 ### Rol de la IA
 Actúa como un Arquitecto de Software Senior y Tech Lead experto en FinTech y Sistemas de Pago de Alta Disponibilidad.
@@ -45,6 +53,8 @@ Generar el código fuente, la arquitectura de microservicios y los scripts de de
 1. Moneda Base: Quetzales (Q).
 2. Seguridad Bancaria: Todo el código generado debe seguir las directrices de OWASP Top 10 y estar preparado para certificación PCI-DSS.
 3. Consistencia Financiera: Todas las operaciones de balance deben ser transaccionales (Cumplimiento ACID). Está estrictamente prohibido usar tipos de datos flotantes (float/double) para dinero; usa tipos numéricos exactos (Decimal o enteros en centavos).
+4. Transferencias P2P: Solo se permiten entre billeteras activas en la moneda base. No se permiten saldos negativos; cada transferencia debe ser idempotente y dejar evidencia auditable.
+5. Alcance de Fase 1: Incluye registro e inicio de sesión, gestión de usuarios y billeteras, transferencias P2P, notificaciones y reportes. Depósitos, retiros, pagos a comercios e integración con proveedores externos quedan fuera hasta que se definan sus reglas y proveedor.
 
 # Exclusiones de la Fase 1
 Si el usuario pide funciones de Criptomonedas, Créditos o Inversiones, la IA debe responder: "Esta funcionalidad está fuera del alcance de la Fase 1".
