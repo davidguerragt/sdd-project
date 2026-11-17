@@ -25,6 +25,8 @@ flowchart LR
 
 Cada proceso selecciona un módulo con `SERVICE_NAME=auth|users|accounts|transactions|notifications|reports|gateway`. `SERVICE_NAME=all` monta todos los routers para desarrollo y no representa el despliegue aislado. Los servicios se comunican mediante HTTP interno con `x-internal-service-token`; los clientes externos deben pasar por el gateway.
 
+El MCP es un proceso cliente separado (`dist-mcp/main.mjs`), con transporte stdio por defecto o Streamable HTTP mediante `--http`. Stdio usa `PAYFLEX_ACCESS_TOKEN`; HTTP verifica cada JWT consultando `/users/me` y deriva el principal del perfil, nunca de argumentos MCP. HTTP exige Redis para borradores/locks y límites de usuario/IP. El perfil Compose `mcp` solo publica en loopback para desarrollo. En remoto debe estar detrás de un proxy TLS confiable y usar `MCP_PUBLIC_URL` HTTPS, hosts/orígenes exactos y Redis privado protegido.
+
 Las tablas viven en un esquema MySQL común para simplificar el entorno de curso, pero el código limita la escritura por módulo y los cambios financieros solo los realiza Transacciones. En un despliegue real, asigna una cuenta MySQL distinta por servicio con permisos mínimos: Auth sobre credenciales/sesiones/recuperación/intentos; Usuarios sobre perfiles; Cuentas sobre metadatos de billetera; Transacciones sobre cuentas financieras, transferencias, ledger y outbox; Notificaciones sobre preferencias/avisos/eventos procesados; Reportes sobre proyecciones/eventos procesados; Gateway sobre buckets de rate limit. Ningún permiso de UPDATE/DELETE debe darse a la tabla `ledger_entries`.
 
 ## Consistencia financiera y eventos

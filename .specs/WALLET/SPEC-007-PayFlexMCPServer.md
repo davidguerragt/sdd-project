@@ -2,7 +2,7 @@
 
 ## 1. Introduccion
 
-El servidor Model Context Protocol (MCP) de PayFlex permite que clientes MCP autorizados consulten informacion propia y soliciten operaciones limitadas mediante los contratos REST existentes. Es una capa de adaptacion del backend, no un nuevo sistema de identidad, un microservicio financiero ni una autoridad de saldos.
+El servidor Model Context Protocol (MCP) de PayFlex permite que clientes MCP autorizados consulten informacion propia y soliciten operaciones limitadas mediante los contratos REST existentes. La implementacion Node.js/TypeScript usa el SDK oficial MCP v2 y se registra para Copilot mediante `.mcp.json`. Es una capa de adaptacion del backend, no un nuevo sistema de identidad, un microservicio financiero ni una autoridad de saldos.
 
 El servidor no se conecta a MySQL, no lee tablas, no llama rutas internas entre servicios y no replica reglas de negocio. Toda autorizacion y validacion definitiva corresponde a los servicios REST de PayFlex.
 
@@ -25,7 +25,7 @@ El servidor no se conecta a MySQL, no lee tablas, no llama rutas internas entre 
 
 ## 3. Arquitectura y contratos
 
-El servidor MCP es un proceso independiente, por ejemplo `payflex-mcp`, que consume HTTPS a traves del gateway. Su configuracion incluye `PAYFLEX_API_BASE_URL`; no incluye credenciales compartidas con privilegios de sistema. Para desarrollo local puede ejecutarse por stdio con una sesion autenticada del usuario local. Para clientes remotos usa Streamable HTTP con sesiones aisladas y autenticacion OAuth 2.1/PKCE, o un mecanismo equivalente aprobado que establezca la identidad del usuario y permita enviar su token de acceso PayFlex al backend.
+El servidor MCP es un proceso independiente, `dist-mcp/main.mjs`, que consume HTTPS a traves del gateway. Su configuracion incluye `PAYFLEX_API_BASE_URL`; no incluye credenciales compartidas con privilegios de sistema. Para desarrollo local puede ejecutarse por stdio con `PAYFLEX_ACCESS_TOKEN` de un usuario autenticado. Para clientes remotos usa Streamable HTTP con sesiones aisladas y autenticacion OAuth 2.1/PKCE, o un mecanismo equivalente aprobado que establezca la identidad del usuario y permita enviar su token de acceso PayFlex al backend. El modo HTTP actual verifica el bearer PayFlex llamando `GET /users/me`; requiere Redis para estado efimero compartido y no sustituye un proveedor OAuth cuando la politica del entorno lo exija.
 
 El backend actual emite JWT de acceso propios. La implementacion MCP debe definir un proveedor seguro que asocie la sesion autenticada con ese JWT. Si el cliente remoto requiere OAuth 2.1, la integracion con el emisor OAuth y el mapeo de identidad son prerrequisitos de despliegue; no se deben sustituir por un token de servicio global. El token nunca se recibe como argumento de una herramienta ni se incluye en recursos, prompts, errores o logs.
 
@@ -66,8 +66,9 @@ La herramienta financiera requiere una confirmacion en dos pasos:
 
 1. `prepare_transfer(recipientWalletId, amount, currency="GTQ")` valida el formato local, crea un borrador efimero ligado al principal y devuelve un resumen visible: billetera receptora, monto exacto GTQ y aviso de que la preparacion no reserva fondos ni garantiza que la operacion sea aceptada.
 2. El cliente muestra el resumen y obtiene aprobacion explicita de la persona. No basta con que un modelo haya decidido llamar la herramienta.
-3. `confirm_transfer(draftId, confirmation, otp?)` exige confirmacion afirmativa, el mismo principal y un borrador vigente e inalterado. El servidor llama `POST /transactions` con `recipientWalletId`, `amount`, `currency`, `Idempotency-Key` y, si se proporciona, `X-2FA-Code`.
-4. El usuario emisor nunca se recibe ni se calcula a partir de argumentos MCP. Transacciones lo determina desde el JWT autenticado y aplica las reglas ACID, estado de billeteras, saldo, ledger, 2FA e idempotencia.
+3. `confirm_transfer(draftId, otp?)` hace que el servidor MCP solicite aprobacion mediante una elicitation de formulario ligada a la llamada MCP. El servidor acepta solo la respuesta del cliente validada por el SDK con `approved=true`; no acepta un booleano de confirmacion enviado como argumento por el modelo. Si la persona rechaza, cancela o no marca la aprobacion, la herramienta termina sin llamar a Transacciones. Si el cliente no soporta elicitation, la solicitud se rechaza y tampoco se llama a Transacciones. La respuesta se liga al mismo principal y borrador vigente e inalterado.
+4. Solo despues de aceptar la elicitation, el servidor llama `POST /transactions` con `recipientWalletId`, `amount`, `currency`, la `Idempotency-Key` guardada en el borrador y, si se proporciona, `X-2FA-Code`.
+5. El usuario emisor nunca se recibe ni se calcula a partir de argumentos MCP. Transacciones lo determina desde el JWT autenticado y aplica las reglas ACID, estado de billeteras, saldo, ledger, 2FA e idempotencia.
 
 El borrador expira a los cinco minutos, se liga a la sesion del usuario, y solo puede confirmarse una vez. Su clave de idempotencia se genera durante la preparacion y se conserva para reintentos de esa operacion; una clave nueva no se genera para reintentar un resultado incierto. El almacenamiento remoto de borradores debe ser efimero, compartido entre replicas y protegido en reposo. Los codigos OTP no se guardan en el borrador ni en logs. Si el backend rechaza por 2FA, el cliente puede volver a confirmar el mismo borrador con un codigo nuevo dentro de su vigencia.
 
@@ -97,7 +98,7 @@ Mapear errores REST a codigos MCP estables sin revelar existencia de usuarios ni
 - Un usuario no puede leer perfil, billeteras, historial, resumen ni notificaciones de otro usuario, incluso manipulando argumentos o URI.
 - Ningun endpoint protegido acepta `userId` del cliente MCP para seleccionar propietario.
 - Todas las llamadas MCP financieras pasan por la API REST de Transacciones y conservan sus respuestas/validaciones autoritativas.
-- Una transferencia no se ejecuta sin aprobacion explicita ligada al resumen que se presenta al usuario.
+- Una transferencia no se ejecuta sin aprobacion explicita por elicitation ligada al resumen que se presenta al usuario; pasar un campo de confirmacion en los argumentos de herramienta no es suficiente.
 - Un usuario con 2FA habilitado no completa una transferencia sin TOTP valido; OTP y JWT no aparecen en resultados ni logs.
 - Duplicar una confirmacion o reintentar tras timeout con la misma clave no duplica el movimiento; cambiar parametros con la misma clave se rechaza.
 - Un borrador expirado, alterado, ya consumido o ligado a otra sesion no puede confirmarse.

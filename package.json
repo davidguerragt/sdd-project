@@ -5,12 +5,19 @@
   "description": "PayFlex wallet microservices backend",
   "scripts": {
     "dev": "tsx watch src/backend/main.ts",
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.mcp.json",
     "start": "node dist/backend/main.js",
+    "mcp:dev": "tsx src/backend/mcp/main.mts",
+    "mcp:stdio": "node dist-mcp/main.mjs",
+    "mcp:http": "node dist-mcp/main.mjs --http",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "jest --runInBand"
+    "test": "jest --runInBand",
+    "test:mcp": "tsx --test src/backend/mcp/server.test.mts"
   },
   "dependencies": {
+    "@modelcontextprotocol/express": "^2.0.2",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.4.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -22,10 +29,12 @@
     "nodemailer": "^10.6.0",
     "otplib": "^12.0.1",
     "reflect-metadata": "^0.2.2",
+    "redis": "^5.12.3",
     "typeorm": "^0.3.20",
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "^2.4.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",

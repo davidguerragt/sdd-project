@@ -14,6 +14,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/dist-mcp ./dist-mcp
 USER node
 EXPOSE 3000
 CMD ["node", "dist/backend/main.js"]

@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "payflex": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist-mcp/main.mjs"],
+      "env": {
+        "PAYFLEX_API_BASE_URL": "${PAYFLEX_API_BASE_URL:-http://127.0.0.1:8080}",
+        "PAYFLEX_ACCESS_TOKEN": "${PAYFLEX_ACCESS_TOKEN}"
+      },
+      "tools": [
+        "get_my_profile",
+        "list_my_wallets",
+        "get_my_wallet",
+        "get_my_transfers",
+        "get_my_report_summary",
+        "list_my_notifications",
+        "set_my_notification_preference",
+        "prepare_transfer",
+        "confirm_transfer"
+      ]
+    }
+  }
+}

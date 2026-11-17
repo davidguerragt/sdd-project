@@ -44,6 +44,17 @@ services:
       retries: 20
     restart: unless-stopped
 
+  redis-mcp:
+    image: redis:7-alpine
+    profiles: ["mcp"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   auth:
     build: .
     environment:
@@ -119,6 +130,29 @@ services:
       - notifications
       - reports
       - mysql
+    restart: unless-stopped
+
+  mcp:
+    build: .
+    profiles: ["mcp"]
+    command: ["node", "dist-mcp/main.mjs", "--http"]
+    environment:
+      NODE_ENV: development
+      MCP_TRANSPORT: http
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: 4000
+      MCP_ALLOWED_HOSTS: localhost,127.0.0.1
+      MCP_ALLOWED_ORIGINS: localhost,127.0.0.1
+      MCP_PUBLIC_URL: http://localhost:4000/mcp
+      PAYFLEX_API_BASE_URL: http://gateway:3000
+      REDIS_URL: redis://redis-mcp:6379
+    ports:
+      - "127.0.0.1:${MCP_PORT:-4000}:4000"
+    depends_on:
+      redis-mcp:
+        condition: service_healthy
+      gateway:
+        condition: service_started
     restart: unless-stopped
 
 volumes:
