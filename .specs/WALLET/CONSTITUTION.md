@@ -33,6 +33,7 @@ El proyecto "PayFlex" es una billetera electrónica móvil diseñada para ofrece
 - Los servicios que necesiten consultar otro módulo deben usar su contrato de API; no deben escribir en sus tablas ni simular una transacción distribuida.
 - Las notificaciones y los reportes no deben retrasar ni revertir una transferencia ya confirmada. Deben consumir eventos de transacciones confirmadas y tolerar entregas repetidas.
 - El servidor MCP definido en `SPEC-007-PayFlexMCPServer.md` es un adaptador de cliente sobre el API Gateway, no un microservicio dueño de datos. No accede directamente a MySQL ni sustituye autenticación, autorización, ledger o validaciones de los servicios.
+- El fondeo simulado de `SPEC-008-PayFlexTestFunding.md` es una fixture sin valor real, habilitada solo en `development`/`test` mediante `ENABLE_TEST_FUNDING=true`; Transacciones es el unico escritor del saldo y registra esta fixture por separado del ledger P2P. No habilitarlo en produccion ni confundirlo con depositos.
 
 ### Principios no negociables
 1. Seguridad: Implementar autenticación y autorización robusta, cifrado de datos en tránsito y en reposo, y protección contra ataques comunes (inyección SQL, XSS, CSRF, etc.).

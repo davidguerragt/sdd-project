@@ -17,6 +17,8 @@ import { createPayFlexServer } from './server.mjs';
 const api = new PayFlexApi(process.env.PAYFLEX_API_BASE_URL ?? 'http://127.0.0.1:8080');
 const memoryDrafts = new MemoryDraftStore();
 const transportMode = process.argv.includes('--http') ? 'http' : process.env.MCP_TRANSPORT ?? 'stdio';
+const testFundingEnabled = ['development', 'test'].includes(process.env.NODE_ENV ?? '')
+	&& process.env.ENABLE_TEST_FUNDING === 'true';
 
 function invalidToken(): OAuthError {
 	return new OAuthError(OAuthErrorCode.InvalidToken, 'PayFlex access token is invalid or expired');
@@ -49,7 +51,7 @@ async function startStdio(): Promise<void> {
 	if (!token) throw new Error('PAYFLEX_ACCESS_TOKEN is required for stdio; configure it in the local MCP client environment');
 	const profile = await api.getProfile(token);
 	if (profile.status !== 'active') throw new Error('The PayFlex user session is not active');
-	serveStdio(() => createPayFlexServer(api, token, profile.id, memoryDrafts), {
+	serveStdio(() => createPayFlexServer(api, token, profile.id, memoryDrafts, { testFundingEnabled }), {
 		onerror: () => process.stderr.write('PayFlex MCP stdio protocol error\n'),
 	});
 	process.stderr.write('PayFlex MCP server ready on stdio\n');
@@ -138,7 +140,7 @@ async function startHttp(): Promise<void> {
 		const token = context.authInfo?.token;
 		const ownerId = context.authInfo?.clientId;
 		if (!token || !ownerId) throw new Error('Authenticated PayFlex user context required');
-		return createPayFlexServer(api, token, ownerId, drafts);
+		return createPayFlexServer(api, token, ownerId, drafts, { testFundingEnabled });
 	});
 	const nodeHandler = toNodeHandler(handler);
 	const ipRateLimit = rateLimitByIp(redis);

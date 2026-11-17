@@ -48,7 +48,13 @@ function registerJsonResource(
   });
 }
 
-export function createPayFlexServer(api: PayFlexApi, accessToken: string, ownerId: string, drafts: DraftStore): McpServer {
+export function createPayFlexServer(
+  api: PayFlexApi,
+  accessToken: string,
+  ownerId: string,
+  drafts: DraftStore,
+  options: { testFundingEnabled?: boolean } = {},
+): McpServer {
   const server = new McpServer({ name: 'payflex-mcp', version: '1.0.0' });
   const readOnly = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false };
   const localWrite = { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false };
@@ -143,6 +149,54 @@ export function createPayFlexServer(api: PayFlexApi, accessToken: string, ownerI
       return toToolResult({ updated: true, channel, enabled });
     } catch (error) { return toToolError(error); }
   });
+
+  if (options.testFundingEnabled) {
+    server.registerTool('fund_test_wallet', {
+      description: 'Agrega saldo simulado sin valor real a una billetera propia de pruebas. Requiere clave idempotente y aprobación explícita; solo está disponible fuera de producción cuando ENABLE_TEST_FUNDING=true.',
+      inputSchema: z.object({
+        walletId: z.string().uuid(),
+        amount: z.string(),
+        currency: z.literal('GTQ').default('GTQ'),
+        idempotencyKey: z.string().min(8).max(128),
+        otp: z.string().regex(/^\d{6}$/).optional(),
+      }).strict(),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    }, async ({ walletId, amount, currency, idempotencyKey, otp }, context) => {
+      const approvalSchema = z.object({ approved: z.boolean().meta({ title: 'Apruebo el fondeo simulado' }) });
+      const approval = acceptedContent(context.mcpReq.inputResponses, 'human_approval', approvalSchema);
+      if (approval?.approved === false) return toToolError(new PayFlexApiError(403, 'confirmation_declined'));
+      if (approval === undefined) {
+        const previousResponse = inputResponse(context.mcpReq.inputResponses, 'human_approval');
+        if (previousResponse.kind === 'elicit' && previousResponse.action !== 'accept') {
+          return toToolError(new PayFlexApiError(403, 'confirmation_declined'));
+        }
+        if (previousResponse.kind === 'elicit' && previousResponse.action === 'accept') {
+          return toToolError(new PayFlexApiError(403, 'confirmation_not_checked'));
+        }
+        return inputRequired({
+          inputRequests: {
+            human_approval: inputRequired.elicit({
+              message: `¿Apruebas agregar Q ${amount} de saldo SIMULADO, sin valor real, a la billetera ${walletId}?`,
+              requestedSchema: approvalSchema,
+            }),
+          },
+        });
+      }
+
+      try {
+        const normalizedAmount = parseAmount(amount);
+        const result = await api.request<Record<string, unknown>>('/transactions/test/fund', accessToken, {
+          method: 'POST',
+          body: { walletId, amount: normalizedAmount, currency },
+          headers: {
+            'idempotency-key': idempotencyKey,
+            ...(otp ? { 'x-2fa-code': otp } : {}),
+          },
+        });
+        return toToolResult(result);
+      } catch (error) { return toToolError(error); }
+    });
+  }
 
   server.registerTool('prepare_transfer', {
     description: 'Prepara un borrador P2P GTQ de 5 minutos. No reserva fondos ni mueve dinero; presenta el resumen al usuario y pide aprobacion explicita antes de confirmar.',

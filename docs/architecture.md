@@ -27,6 +27,8 @@ Cada proceso selecciona un módulo con `SERVICE_NAME=auth|users|accounts|transac
 
 El MCP es un proceso cliente separado (`dist-mcp/main.mjs`), con transporte stdio por defecto o Streamable HTTP mediante `--http`. Stdio usa `PAYFLEX_ACCESS_TOKEN`; HTTP verifica cada JWT consultando `/users/me` y deriva el principal del perfil, nunca de argumentos MCP. HTTP exige Redis para borradores/locks y límites de usuario/IP. El perfil Compose `mcp` solo publica en loopback para desarrollo. En remoto debe estar detrás de un proxy TLS confiable y usar `MCP_PUBLIC_URL` HTTPS, hosts/orígenes exactos y Redis privado protegido.
 
+`fund_test_wallet` es una herramienta opt-in. Solo se registra fuera de producción con `ENABLE_TEST_FUNDING=true`; Transactions aplica la misma guarda al endpoint. El saldo y `test_wallet_fundings` se guardan en una transacción ACID, con lock de billetera, idempotencia, verificación 2FA y auditoría. La tabla es una bitácora de fixtures simuladas separada de `ledger_entries`, eventos P2P, notificaciones y reportes. No representa valor real; vuelve a estar desactivada por defecto en Compose/producción.
+
 Las tablas viven en un esquema MySQL común para simplificar el entorno de curso, pero el código limita la escritura por módulo y los cambios financieros solo los realiza Transacciones. En un despliegue real, asigna una cuenta MySQL distinta por servicio con permisos mínimos: Auth sobre credenciales/sesiones/recuperación/intentos; Usuarios sobre perfiles; Cuentas sobre metadatos de billetera; Transacciones sobre cuentas financieras, transferencias, ledger y outbox; Notificaciones sobre preferencias/avisos/eventos procesados; Reportes sobre proyecciones/eventos procesados; Gateway sobre buckets de rate limit. Ningún permiso de UPDATE/DELETE debe darse a la tabla `ledger_entries`.
 
 ## Consistencia financiera y eventos
@@ -38,6 +40,8 @@ Contrato `transfer.confirmed` persistido en `outbox_events`:
 ```json
 {
   "eventId": "uuid",
+
+Para bases existentes, aplica cada archivo nuevo de `migrations/` una vez con las credenciales de `.env`; `migrations/002-test-wallet-fundings.sql` solo crea la tabla de registros de fondeo ficticio si no existe. No requiere actualizar ni borrar filas de billeteras existentes.
   "transferId": "uuid",
   "senderId": "wallet-uuid",
   "recipientId": "wallet-uuid",

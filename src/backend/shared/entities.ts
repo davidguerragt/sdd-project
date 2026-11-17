@@ -109,6 +109,20 @@ export class Transfer {
   @CreateDateColumn({ name: 'created_at', type: 'datetime' }) createdAt!: Date;
 }
 
+@Entity('test_wallet_fundings')
+@Index(['walletId', 'createdAt'])
+export class TestWalletFunding {
+  @PrimaryColumn(id()) id!: string;
+  @Column({ name: 'actor_id', ...id() }) actorId!: string;
+  @Column({ name: 'wallet_id', ...id() }) walletId!: string;
+  @Column({ type: 'decimal', precision: 18, scale: 2 }) amount!: string;
+  @Column({ name: 'balance_after', type: 'decimal', precision: 18, scale: 2 }) balanceAfter!: string;
+  @Column({ type: 'char', length: 3, default: 'GTQ' }) currency!: string;
+  @Index({ unique: true }) @Column({ name: 'idempotency_key', type: 'varchar', length: 128 }) idempotencyKey!: string;
+  @Column({ name: 'request_hash', type: 'char', length: 64 }) requestHash!: string;
+  @CreateDateColumn({ name: 'created_at', type: 'datetime' }) createdAt!: Date;
+}
+
 @Entity('ledger_entries')
 @Index(['transferId', 'walletId'], { unique: true })
 export class LedgerEntry {
@@ -202,6 +216,6 @@ export class GatewayRateLimit {
 
 export const entities = [
   AuthCredential, AuthSession, PasswordReset, LoginAttempt, AuthLoginLimit, UserProfile, Wallet,
-  FinancialAccount, Transfer, LedgerEntry, OutboxEvent, NotificationRecord,
+  FinancialAccount, Transfer, TestWalletFunding, LedgerEntry, OutboxEvent, NotificationRecord,
   NotificationPreference, TransferProjection, ProcessedEvent, AuditEvent, GatewayRateLimit,
 ];

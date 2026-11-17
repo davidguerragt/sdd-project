@@ -19,6 +19,7 @@ function readText(result) {
 test('PayFlex MCP registers scoped primitives and protects the transfer confirmation flow', async () => {
     const originalFetch = globalThis.fetch;
     const transferRequests = [];
+    const fundingRequests = [];
     globalThis.fetch = async (input, init) => {
         const url = new URL(input instanceof Request ? input.url : input.toString());
         if (url.pathname === '/users/me') {
@@ -36,6 +37,13 @@ test('PayFlex MCP registers scoped primitives and protects the transfer confirma
                 status: 201, headers: { 'content-type': 'application/json' },
             });
         }
+        if (url.pathname === '/transactions/test/fund') {
+            const headers = new Headers(init?.headers);
+            fundingRequests.push({ headers, body: JSON.parse(String(init?.body)) });
+            return new Response(JSON.stringify({ fundingId: randomUUID(), walletId: '4ae51e2d-47f4-4f4a-b0a2-a29ccbf3111b', amount: '50.00', currency: 'GTQ', balance: '175.00', simulated: true }), {
+                status: 201, headers: { 'content-type': 'application/json' },
+            });
+        }
         return new Response(JSON.stringify({ error: 'not_found' }), { status: 404, headers: { 'content-type': 'application/json' } });
     };
     const drafts = new MemoryDraftStore();
@@ -44,7 +52,7 @@ test('PayFlex MCP registers scoped primitives and protects the transfer confirma
     const approvalMessages = [];
     const handler = createMcpHandler((context) => {
         const principal = context.authInfo?.clientId ?? firstUserId;
-        return createPayFlexServer(api, accessToken, principal, drafts);
+        return createPayFlexServer(api, accessToken, principal, drafts, { testFundingEnabled: true });
     });
     async function connectAs(userId) {
         const transport = new StreamableHTTPClientTransport(new URL('http://payflex-mcp.test/mcp'), {
@@ -72,7 +80,7 @@ test('PayFlex MCP registers scoped primitives and protects the transfer confirma
         assert.deepEqual(new Set(tools.tools.map((tool) => tool.name)), new Set([
             'get_my_profile', 'list_my_wallets', 'get_my_wallet', 'get_my_transfers',
             'get_my_report_summary', 'list_my_notifications', 'set_my_notification_preference',
-            'prepare_transfer', 'confirm_transfer',
+            'prepare_transfer', 'confirm_transfer', 'fund_test_wallet',
         ]));
         const resources = await firstClient.listResources();
         assert.equal(resources.resources.length, 6);
@@ -120,6 +128,22 @@ test('PayFlex MCP registers scoped primitives and protects the transfer confirma
         });
         assert.equal(repeated.isError, undefined);
         assert.equal(transferRequests.length, 1);
+        const fundingArgs = {
+            walletId: '4ae51e2d-47f4-4f4a-b0a2-a29ccbf3111b', amount: '50.00', currency: 'GTQ',
+            idempotencyKey: randomUUID(), otp: '123456',
+        };
+        approveTransfers = false;
+        const fundingDeclined = await firstClient.callTool({ name: 'fund_test_wallet', arguments: fundingArgs });
+        assert.equal(fundingDeclined.isError, true);
+        assert.equal(fundingRequests.length, 0);
+        approveTransfers = true;
+        const fundingApproved = await firstClient.callTool({ name: 'fund_test_wallet', arguments: fundingArgs });
+        assert.equal(fundingApproved.isError, undefined);
+        assert.equal(fundingRequests.length, 1);
+        assert.equal(fundingRequests[0].headers.get('idempotency-key'), fundingArgs.idempotencyKey);
+        assert.equal(fundingRequests[0].headers.get('x-2fa-code'), '123456');
+        assert.deepEqual(fundingRequests[0].body, { walletId: fundingArgs.walletId, amount: '50.00', currency: 'GTQ' });
+        assert.match(approvalMessages.at(-1) ?? '', /SIMULADO, sin valor real/);
         const expiredDraftId = randomUUID();
         await drafts.create({
             id: expiredDraftId, ownerId: firstUserId, recipientWalletId, amount: '1.00', currency: 'GTQ',
@@ -136,5 +160,24 @@ test('PayFlex MCP registers scoped primitives and protects the transfer confirma
         await secondClient?.close();
         await handler.close();
         globalThis.fetch = originalFetch;
+    }
+});
+test('test funding tool is not registered when the explicit test flag is absent', async () => {
+    const api = new PayFlexApi('http://127.0.0.1:8080');
+    const handler = createMcpHandler(() => createPayFlexServer(api, accessToken, firstUserId, new MemoryDraftStore()));
+    const transport = new StreamableHTTPClientTransport(new URL('http://payflex-mcp.test/mcp'), {
+        fetch: (input, init) => handler.fetch(new Request(input, init), {
+            authInfo: { token: accessToken, clientId: firstUserId, scopes: [], expiresAt: Math.floor(Date.now() / 1000) + 600 },
+        }),
+    });
+    const client = new Client({ name: 'payflex-mcp-test', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
+    try {
+        await client.connect(transport);
+        const tools = await client.listTools();
+        assert.equal(tools.tools.some((tool) => tool.name === 'fund_test_wallet'), false);
+    }
+    finally {
+        await client.close();
+        await handler.close();
     }
 });

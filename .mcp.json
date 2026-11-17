@@ -5,7 +5,7 @@
       "command": "node",
       "args": ["dist-mcp/main.mjs"],
       "env": {
-        "PAYFLEX_API_BASE_URL": "${PAYFLEX_API_BASE_URL:-http://127.0.0.1:8080}",
+        "PAYFLEX_API_BASE_URL": "${PAYFLEX_API_BASE_URL:-http://127.0.0.1:3000}",
         "PAYFLEX_ACCESS_TOKEN": "${PAYFLEX_ACCESS_TOKEN}"
       },
       "tools": [
@@ -17,7 +17,8 @@
         "list_my_notifications",
         "set_my_notification_preference",
         "prepare_transfer",
-        "confirm_transfer"
+        "confirm_transfer",
+        "fund_test_wallet"
       ]
     }
   }

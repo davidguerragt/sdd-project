@@ -100,6 +100,7 @@ export function publicError(error) {
     const codes = {
         insufficient_funds: ['INSUFFICIENT_FUNDS', 'No hay saldo suficiente para completar la transferencia.'],
         wallet_inactive: ['WALLET_INACTIVE', 'Una de las billeteras no está activa.'],
+        balance_limit_exceeded: ['VALIDATION_ERROR', 'El importe supera el saldo máximo permitido.'],
         second_factor_required: ['SECOND_FACTOR_REQUIRED', 'Se requiere un código TOTP válido.'],
         idempotency_key_conflict: ['IDEMPOTENCY_CONFLICT', 'La clave de idempotencia ya se usó con otros datos.'],
         invalid_amount: ['VALIDATION_ERROR', 'El importe no es válido en GTQ.'],

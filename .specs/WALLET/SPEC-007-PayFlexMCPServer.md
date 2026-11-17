@@ -13,12 +13,14 @@ El servidor no se conecta a MySQL, no lee tablas, no llama rutas internas entre 
 - Recursos MCP de solo lectura para perfil propio, billeteras propias, historial, resumen de reportes y notificaciones propias.
 - Herramientas para consultar esos recursos usando las APIs publicas autenticadas del gateway.
 - Flujo MCP de preparacion y confirmacion explicita para una transferencia P2P GTQ.
+- Herramienta condicional de fondeo ficticio exclusivamente para pruebas, con las guardas y reglas de `SPEC-008-PayFlexTestFunding.md`.
 - Preferencias de notificacion in-app del usuario autenticado.
 - Transportes stdio para desarrollo local y Streamable HTTP para clientes remotos autorizados.
 
 ### Excluido
 
 - Depositos, retiros, pagos a comercios, pagos externos, criptomonedas, credito e inversiones.
+- Depositos reales o canjeables. El unico fondeo MCP permitido es la fixture simulada y bloqueada por entorno de SPEC-008.
 - Consultas o acciones administrativas, soporte impersonado y acceso a perfiles de terceros.
 - Modificacion de saldos, ledger, transferencias, credenciales o estado financiero fuera de las APIs autorizadas.
 - Autenticacion mediante contrasenas, secretos, PINs o codigos recibidos como argumentos libres de herramientas, salvo el codigo TOTP requerido por el flujo confirmado.
@@ -57,6 +59,7 @@ Los identificadores de billetera enviados por el cliente solo pueden utilizarse 
 - `get_my_report_summary`: periodo opcional valido; devuelve cantidades decimales como cadenas, moneda y momento de actualizacion.
 - `list_my_notifications`: paginacion limitada; devuelve notificaciones del usuario autenticado.
 - `set_my_notification_preference`: `channel` y `enabled`; solo canales habilitados por el backend, inicialmente `in_app`.
+- `fund_test_wallet`: solo se registra con `ENABLE_TEST_FUNDING=true` fuera de produccion; agrega saldo ficticio GTQ a una billetera propia via Transacciones y exige clave idempotente y aprobacion por elicitation. Sus reglas completas estan en SPEC-008.
 
 Las herramientas de lectura llevan anotacion MCP de solo lectura. El servidor no presenta el reporte eventualmente consistente como saldo actual; para saldo usa la consulta de Cuentas, que obtiene el valor autoritativo de Transacciones.
 

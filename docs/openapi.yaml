@@ -218,6 +218,34 @@ paths:
         '201': { description: Transferencia confirmada de forma atómica }
         '403': { description: Billetera no pertenece al emisor }
         '409': { description: Saldo insuficiente, estado no activo o conflicto idempotente }
+  /transactions/test/fund:
+    post:
+      summary: Agregar saldo ficticio a una billetera propia en desarrollo/pruebas
+      description: Solo existe cuando NODE_ENV es development/test y ENABLE_TEST_FUNDING=true. Nunca habilitar en producción; no representa dinero real ni crea un asiento P2P.
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+        - in: header
+          name: X-2FA-Code
+          required: false
+          schema: { type: string, minLength: 6, maxLength: 6 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [walletId, amount, currency]
+              properties:
+                walletId: { type: string, format: uuid }
+                amount: { type: string, pattern: '^(0|[1-9][0-9]*)(\.[0-9]{1,2})?$' }
+                currency: { type: string, enum: [GTQ] }
+      responses:
+        '201': { description: Fondeo de prueba aplicado dentro de Transacciones }
+        '404': { description: Recurso oculto fuera de modo desarrollo/pruebas o billetera no propia }
+        '409': { description: Billetera no activa, límite excedido o conflicto idempotente }
   /transactions/history:
     get:
       summary: Historial de transferencias propias

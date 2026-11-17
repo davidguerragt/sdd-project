@@ -3,7 +3,7 @@ import { Router } from 'express';
 import { IsNull, In } from 'typeorm';
 import { z } from 'zod';
 import { database } from '../shared/database';
-import { FinancialAccount, LedgerEntry, OutboxEvent, Transfer } from '../shared/entities';
+import { AuditEvent, FinancialAccount, LedgerEntry, OutboxEvent, TestWalletFunding, Transfer } from '../shared/entities';
 import { asyncRoute, authenticate, AuthenticatedRequest, audit, requireInternal, requireUser, requiredEnv } from '../shared/security';
 import { decimalToCents, formatCents, parseAmountToCents } from '../shared/money';
 
@@ -14,6 +14,10 @@ const transferEventSchema = z.object({
   recipientId: z.string().uuid(), senderUserId: z.string().uuid(), recipientUserId: z.string().uuid(),
   amount: z.string(), currency: z.literal('GTQ'), createdAt: z.string().datetime(),
 });
+
+function testFundingEnabled(): boolean {
+  return ['development', 'test'].includes(process.env.NODE_ENV ?? '') && process.env.ENABLE_TEST_FUNDING === 'true';
+}
 
 transactionsRouter.post('/internal/accounts', requireInternal, asyncRoute(async (request, response) => {
   const input = z.object({ walletId: z.string().uuid(), ownerId: z.string().uuid(), currency: z.literal('GTQ') }).parse(request.body);
@@ -62,6 +66,107 @@ transactionsRouter.post('/internal/users/:userId/disable', requireInternal, asyn
   const userId = z.string().uuid().parse(request.params.userId);
   await database.getRepository(FinancialAccount).update({ ownerId: userId }, { status: 'disabled' });
   response.status(204).end();
+}));
+
+transactionsRouter.post('/test/fund', (request, response, next) => {
+  if (!testFundingEnabled()) {
+    response.status(404).json({ error: 'not_found' });
+    return;
+  }
+  next();
+}, authenticate, asyncRoute(async (request: AuthenticatedRequest, response) => {
+  const actorId = requireUser(request, response);
+  if (!actorId) return;
+  const input = z.object({
+    walletId: z.string().uuid(),
+    amount: z.string(),
+    currency: z.literal('GTQ').default('GTQ'),
+  }).strict().parse(request.body);
+  const idempotencyKey = request.header('idempotency-key');
+  if (!idempotencyKey || idempotencyKey.length < 8 || idempotencyKey.length > 128) {
+    response.status(400).json({ error: 'idempotency_key_required' });
+    return;
+  }
+  let amountCents: bigint;
+  try {
+    amountCents = parseAmountToCents(input.amount);
+  } catch {
+    response.status(400).json({ error: 'invalid_amount' });
+    return;
+  }
+  const amount = formatCents(amountCents);
+  const requestHash = crypto.createHash('sha256')
+    .update(`${actorId}|${input.walletId}|${amountCents}|${input.currency}`)
+    .digest('hex');
+  const fundingRepo = database.getRepository(TestWalletFunding);
+
+  const respondWithPrior = async () => {
+    const prior = await fundingRepo.findOne({ where: { idempotencyKey } });
+    if (!prior) return false;
+    if (prior.actorId !== actorId || prior.requestHash !== requestHash) {
+      response.status(409).json({ error: 'idempotency_key_conflict' });
+      return true;
+    }
+    response.status(200).json({
+      fundingId: prior.id, walletId: prior.walletId, amount: prior.amount,
+      currency: prior.currency, balance: prior.balanceAfter, simulated: true, createdAt: prior.createdAt,
+    });
+    return true;
+  };
+
+  if (await respondWithPrior()) return;
+
+  const authUrl = process.env.AUTH_SERVICE_URL ?? `http://127.0.0.1:${process.env.PORT ?? 3000}`;
+  const secondFactorResult = await fetch(`${authUrl}/auth/internal/users/${actorId}/verify-sensitive`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-internal-service-token': requiredEnv('INTERNAL_SERVICE_TOKEN'),
+    },
+    body: JSON.stringify({ otp: request.header('x-2fa-code') }),
+    signal: AbortSignal.timeout(5000),
+  }).catch(() => undefined);
+  if (!secondFactorResult?.ok) {
+    const status = secondFactorResult?.status === 401 || secondFactorResult?.status === 429 ? secondFactorResult.status : 503;
+    response.status(status).json({ error: status === 503 ? 'authentication_service_unavailable' : 'second_factor_required' });
+    return;
+  }
+
+  const now = new Date();
+  try {
+    const funding = await database.transaction(async (manager) => {
+      const account = await manager.getRepository(FinancialAccount).createQueryBuilder('account')
+        .setLock('pessimistic_write').where('account.id = :walletId', { walletId: input.walletId }).getOne();
+      if (!account || account.ownerId !== actorId) throw new Error('wallet_not_found');
+      if (account.status !== 'active' || account.currency !== input.currency) throw new Error('wallet_inactive');
+
+      const balanceCents = decimalToCents(account.balance);
+      if (balanceCents + amountCents > 999999999999999999n) throw new Error('balance_limit_exceeded');
+      account.balance = formatCents(balanceCents + amountCents);
+      await manager.getRepository(FinancialAccount).save(account);
+
+      const record = {
+        id: crypto.randomUUID(), actorId, walletId: account.id, amount, balanceAfter: account.balance,
+        currency: input.currency, idempotencyKey, requestHash, createdAt: now,
+      };
+      await manager.getRepository(TestWalletFunding).insert(record);
+      await manager.getRepository(AuditEvent).insert({
+        id: crypto.randomUUID(), actorId, action: 'transactions.test_funding.created', targetId: account.id,
+        metadata: JSON.stringify({ fundingId: record.id, amount, currency: input.currency, simulated: true }),
+        createdAt: now,
+      });
+      return record;
+    });
+    response.status(201).json({
+      fundingId: funding.id, walletId: funding.walletId, amount: funding.amount,
+      currency: funding.currency, balance: funding.balanceAfter, simulated: true, createdAt: funding.createdAt,
+    });
+  } catch (error) {
+    if (await respondWithPrior()) return;
+    const message = error instanceof Error ? error.message : '';
+    const status = message === 'wallet_not_found' ? 404 : ['wallet_inactive', 'balance_limit_exceeded'].includes(message) ? 409 : 500;
+    response.status(status).json({ error: status === 500 ? 'test_funding_failed' : message });
+  }
 }));
 
 transactionsRouter.post('/', authenticate, asyncRoute(async (request: AuthenticatedRequest, response) => {

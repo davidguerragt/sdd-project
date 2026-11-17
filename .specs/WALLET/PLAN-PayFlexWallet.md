@@ -12,6 +12,7 @@ Implementar las fases en orden, revisando los criterios de aceptación de las es
 - Implementar Autenticación (SPEC-001) y Usuarios (SPEC-002).
 - Implementar Cuentas/Billeteras (SPEC-003), sin modificar saldos.
 - Implementar Transacciones (SPEC-004) con ledger balanceado, idempotencia, bloqueos y pruebas de concurrencia.
+- Implementar el fondeo simulado no canjeable de pruebas (SPEC-008), desactivado en producción y sin tratarlo como depósito ni asiento P2P.
 - Implementar Notificaciones (SPEC-005) y Reportes (SPEC-006) consumiendo eventos confirmados.
 
 ## Fase 3: API Gateway e Integraciones
@@ -31,4 +32,5 @@ Implementar las fases en orden, revisando los criterios de aceptación de las es
 ## Fase 6: Integración MCP
 - Diseñar el servidor MCP PayFlex como adaptador autenticado del gateway según `SPEC-007-PayFlexMCPServer.md`; no accede directamente a bases de datos ni sustituye la autorización del backend.
 - Implementar primero recursos y herramientas de consulta propia; habilitar transferencias solo con borrador, aprobación explícita, 2FA e idempotencia delegada a Transacciones.
+- Habilitar `fund_test_wallet` únicamente con elicitation y `ENABLE_TEST_FUNDING=true` fuera de producción; toda mutación debe delegarse al endpoint protegido de Transacciones.
 - Validar aislamiento de identidad, sesiones/transportes, límites de solicitudes, privacidad, errores y reintentos antes de habilitar clientes remotos.
