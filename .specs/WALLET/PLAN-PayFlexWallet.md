@@ -27,3 +27,8 @@ Implementar las fases en orden, revisando los criterios de aceptación de las es
 ## Fase 5: Calidad y Despliegue
 - Ejecutar pruebas unitarias, integración y concurrencia financiera; verificar rollback, idempotencia, permisos y privacidad.
 - Aplicar ESLint/Jest en Node.js y pruebas Flutter; documentar configuración, despliegue, secretos y recuperación.
+
+## Fase 6: Integración MCP
+- Diseñar el servidor MCP PayFlex como adaptador autenticado del gateway según `SPEC-007-PayFlexMCPServer.md`; no accede directamente a bases de datos ni sustituye la autorización del backend.
+- Implementar primero recursos y herramientas de consulta propia; habilitar transferencias solo con borrador, aprobación explícita, 2FA e idempotencia delegada a Transacciones.
+- Validar aislamiento de identidad, sesiones/transportes, límites de solicitudes, privacidad, errores y reintentos antes de habilitar clientes remotos.

@@ -32,6 +32,7 @@ El proyecto "PayFlex" es una billetera electrónica móvil diseñada para ofrece
 - El microservicio de Cuentas expone los flujos de apertura, consulta, suspensión, reactivación y cierre de billeteras, pero delega las mutaciones del estado financiero al servicio de Transacciones mediante un contrato síncrono. No se permite tomar decisiones de transferencia a partir de una copia eventualmente consistente del estado.
 - Los servicios que necesiten consultar otro módulo deben usar su contrato de API; no deben escribir en sus tablas ni simular una transacción distribuida.
 - Las notificaciones y los reportes no deben retrasar ni revertir una transferencia ya confirmada. Deben consumir eventos de transacciones confirmadas y tolerar entregas repetidas.
+- El servidor MCP definido en `SPEC-007-PayFlexMCPServer.md` es un adaptador de cliente sobre el API Gateway, no un microservicio dueño de datos. No accede directamente a MySQL ni sustituye autenticación, autorización, ledger o validaciones de los servicios.
 
 ### Principios no negociables
 1. Seguridad: Implementar autenticación y autorización robusta, cifrado de datos en tránsito y en reposo, y protección contra ataques comunes (inyección SQL, XSS, CSRF, etc.).

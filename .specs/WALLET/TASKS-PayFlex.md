@@ -31,3 +31,7 @@
 - [TASK-15]: Probar autorización, validación de montos, saldo insuficiente, rollback, idempotencia y transferencias concurrentes.
 - [TASK-16]: Probar eventos repetidos y fallas de notificación sin afectar transferencias confirmadas; verificar privacidad y límites de reportes.
 - [TASK-17]: Configurar despliegue, health checks, logs sin secretos, métricas y documentación operativa.
+
+## Fase 6: Integración MCP
+- [TASK-18]: Implementar el servidor MCP según `SPEC-007-PayFlexMCPServer.md`: recursos y herramientas autenticadas por usuario, llamadas únicamente a las APIs del gateway, transporte stdio local y Streamable HTTP remoto con autenticación aprobada.
+- [TASK-19]: Implementar pruebas de aislamiento por usuario, confirmación explícita de transferencias, borradores expirados, 2FA, reintentos idempotentes, límites de tamaño/frecuencia y redacción de secretos; no habilitar transporte remoto hasta aprobar sus prerrequisitos de identidad y TLS.
