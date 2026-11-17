@@ -1,0 +1,47 @@
+{
+  "name": "payflex-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "PayFlex wallet microservices backend",
+  "scripts": {
+    "dev": "tsx watch src/backend/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/backend/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.0.0",
+    "http-proxy-middleware": "^3.0.3",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.5",
+    "nodemailer": "^10.6.0",
+    "otplib": "^12.0.1",
+    "reflect-metadata": "^0.2.2",
+    "typeorm": "^0.3.20",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.2",
+    "@types/nodemailer": "^6.4.17",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "typeorm": {
+      "glob": "^14.0.2",
+      "minimatch": "^11.0.9"
+    }
+  }
+}

@@ -1,0 +1,299 @@
+openapi: 3.1.0
+info:
+  title: PayFlex API
+  version: 1.0.0
+  description: API de billetera GTQ. Las transferencias P2P son las únicas operaciones financieras de la Fase 1.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      security: []
+      summary: Registrar usuario y credenciales
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, phone, password, firstName, lastName]
+              properties:
+                email: { type: string, format: email }
+                phone: { type: string, description: E.164 }
+                password: { type: string, minLength: 12, maxLength: 128 }
+                firstName: { type: string }
+                lastName: { type: string }
+      responses:
+        '201': { description: Usuario creado }
+        '409': { description: Identificador duplicado }
+  /auth/login:
+    post:
+      security: []
+      summary: Iniciar sesión con correo o teléfono
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [identifier, password]
+              properties:
+                identifier: { type: string }
+                password: { type: string }
+                otp: { type: string, minLength: 6, maxLength: 6 }
+      responses:
+        '200': { description: Tokens de acceso y renovación }
+        '401': { description: Credenciales inválidas }
+  /auth/refresh:
+    post:
+      security: []
+      summary: Rotar refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '200': { description: Nuevos tokens }
+        '401': { description: Sesión inválida }
+  /auth/logout:
+    post:
+      security: []
+      summary: Revocar refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        '204': { description: Sesión revocada }
+  /auth/password/forgot:
+    post:
+      security: []
+      summary: Solicitar recuperación sin revelar existencia de cuenta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202': { description: Solicitud aceptada }
+  /auth/password/reset:
+    post:
+      security: []
+      summary: Cambiar contraseña con token de un solo uso
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              properties:
+                token: { type: string }
+                password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '204': { description: Contraseña actualizada }
+        '400': { description: Token inválido o vencido }
+  /auth/2fa/setup:
+    post:
+      summary: Iniciar configuración TOTP
+      responses:
+        '200': { description: Secreto de configuración y URI otpauth }
+  /auth/2fa/enable:
+    post:
+      summary: Confirmar y habilitar TOTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp: { type: string, minLength: 6, maxLength: 6 }
+      responses:
+        '204': { description: 2FA habilitado }
+  /auth/2fa/disable:
+    post:
+      summary: Deshabilitar TOTP con código vigente
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [otp]
+              properties:
+                otp: { type: string, minLength: 6, maxLength: 6 }
+      responses:
+        '204': { description: 2FA deshabilitado }
+  /users/me:
+    get:
+      summary: Consultar perfil propio
+      responses:
+        '200': { description: Perfil del usuario autenticado }
+    patch:
+      summary: Actualizar nombre y apellido
+      responses:
+        '204': { description: Perfil actualizado }
+    delete:
+      summary: Desactivar usuario y revocar/suspender acceso financiero
+      responses:
+        '204': { description: Usuario desactivado }
+  /accounts/wallets:
+    get:
+      summary: Listar billeteras y saldos autoritativos
+      responses:
+        '200': { description: Billeteras del usuario }
+    post:
+      summary: Abrir billetera GTQ (idempotente)
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+      responses:
+        '201': { description: Billetera abierta }
+        '409': { description: Ya existe una billetera }
+  /accounts/wallets/{walletId}:
+    get:
+      summary: Consultar billetera propia y saldo
+      parameters:
+        - $ref: '#/components/parameters/walletId'
+      responses:
+        '200': { description: Billetera }
+        '404': { description: No encontrada }
+  /accounts/wallets/{walletId}/{action}:
+    post:
+      summary: Suspender, reactivar o cerrar billetera
+      parameters:
+        - $ref: '#/components/parameters/walletId'
+        - in: path
+          name: action
+          required: true
+          schema: { type: string, enum: [suspend, reactivate, close] }
+      responses:
+        '204': { description: Estado actualizado por Transacciones }
+        '409': { description: Estado no permitido o saldo pendiente }
+  /transactions:
+    post:
+      summary: Transferir GTQ a otra billetera
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string, minLength: 8, maxLength: 128 }
+        - in: header
+          name: X-2FA-Code
+          required: false
+          description: Requerido cuando 2FA está habilitado para la cuenta emisora.
+          schema: { type: string, minLength: 6, maxLength: 6 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recipientWalletId, amount]
+              properties:
+                recipientWalletId: { type: string, format: uuid }
+                amount: { type: string, pattern: '^([1-9][0-9]*|0)(\.[0-9]{1,2})?$' }
+                currency: { type: string, enum: [GTQ], default: GTQ }
+      responses:
+        '201': { description: Transferencia confirmada de forma atómica }
+        '403': { description: Billetera no pertenece al emisor }
+        '409': { description: Saldo insuficiente, estado no activo o conflicto idempotente }
+  /transactions/history:
+    get:
+      summary: Historial de transferencias propias
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200': { description: Historial paginado }
+  /notifications:
+    get:
+      summary: Listar notificaciones propias
+      responses:
+        '200': { description: Página de notificaciones in-app }
+  /notifications/preferences:
+    get:
+      summary: Consultar preferencias disponibles
+      responses:
+        '200': { description: Preferencias del usuario }
+  /notifications/preferences/{channel}:
+    put:
+      summary: Actualizar preferencia de canal
+      parameters:
+        - in: path
+          name: channel
+          required: true
+          schema: { type: string, enum: [in_app] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        '204': { description: Preferencia actualizada }
+  /reports/transfers:
+    get:
+      summary: Consultar proyección de historial con filtros
+      parameters:
+        - in: query
+          name: direction
+          schema: { type: string, enum: [sent, received] }
+        - in: query
+          name: from
+          schema: { type: string, format: date-time }
+        - in: query
+          name: to
+          schema: { type: string, format: date-time }
+      responses:
+        '200': { description: Historial derivado con dataAsOf }
+  /reports/summary:
+    get:
+      summary: Resumen GTQ de entradas y salidas confirmadas
+      responses:
+        '200': { description: Totales decimales y dataAsOf }
+  /reports/admin/summary:
+    get:
+      summary: Métricas operativas agregadas para administradores
+      responses:
+        '200': { description: Volumen agregado auditado }
+        '403': { description: Se requiere permiso administrativo }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    walletId:
+      in: path
+      name: walletId
+      required: true
+      schema: { type: string, format: uuid }

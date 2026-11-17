@@ -1,0 +1,125 @@
+x-backend-env: &backend-env
+  NODE_ENV: production
+  PORT: 3000
+  DB_HOST: mysql
+  DB_PORT: 3306
+  DB_NAME: payflex
+  DB_USER: ${DB_USER:-payflex}
+  DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+  DB_SYNCHRONIZE: "false"
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in .env}
+  INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:?Set INTERNAL_SERVICE_TOKEN in .env}
+  TOTP_ENCRYPTION_KEY: ${TOTP_ENCRYPTION_KEY:?Set TOTP_ENCRYPTION_KEY in .env}
+  FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+  USERS_SERVICE_URL: http://users:3000
+  AUTH_SERVICE_URL: http://auth:3000
+  ACCOUNTS_SERVICE_URL: http://accounts:3000
+  TRANSACTIONS_SERVICE_URL: http://transactions:3000
+  NOTIFICATIONS_SERVICE_URL: http://notifications:3000
+  REPORTS_SERVICE_URL: http://reports:3000
+  ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
+  SMTP_HOST: ${SMTP_HOST:-}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_SECURE: ${SMTP_SECURE:-false}
+  SMTP_USER: ${SMTP_USER:-}
+  SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+  SMTP_FROM: ${SMTP_FROM:-}
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: payflex
+      MYSQL_USER: ${DB_USER:-payflex}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - payflex_mysql:/var/lib/mysql
+      - ./schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  auth:
+    build: .
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: auth
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  users:
+    build: .
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: users
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  accounts:
+    build: .
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: accounts
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  transactions:
+    build: .
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: transactions
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  notifications:
+    build: .
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: notifications
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  reports:
+    build: .
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: reports
+    depends_on:
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway:
+    build: .
+    environment:
+      <<: *backend-env
+      SERVICE_NAME: gateway
+    ports:
+      - "${GATEWAY_PORT:-8080}:3000"
+    depends_on:
+      - auth
+      - users
+      - accounts
+      - transactions
+      - notifications
+      - reports
+      - mysql
+    restart: unless-stopped
+
+volumes:
+  payflex_mysql:
